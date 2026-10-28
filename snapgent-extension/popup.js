@@ -3,9 +3,15 @@ const SUPPORTED_HOSTS = [
   "chat.deepseek.com", "deepseek.com", "chatgpt.com", "chat.openai.com", "claude.ai", "www.claude.ai",
   "gemini.google.com", "www.kimi.ai", "kimi.ai",
   "chat.z.ai", "chat.qwen.ai", "arena.ai", "www.meta.ai", "meta.ai", "ptero.pro", "grok.com",
+  "perplexity.ai", "chat.mistral.ai", "copilot.com", "copilot.microsoft.com",
+  "copilot.cloud.microsoft", "m365.cloud.microsoft", "poe.com",
 ];
 // const DEFAULT_AI_URL = "https://chat.deepseek.com/"; // DeepSeek hidden (disabled, not deleted)
 const DEFAULT_AI_URL = "https://chatgpt.com/";
+const isSupportedUrl = (url) => {
+  try { const parsed = new URL(url); return parsed.protocol === "https:" && SUPPORTED_HOSTS.includes(parsed.hostname); }
+  catch { return false; }
+};
 
 
 
@@ -99,8 +105,8 @@ document.getElementById("settings").addEventListener("click", () => {
   // Tries the in-page panel on an already-open supported AI tab first, so
   // opening it doesn't require a conversation to already be started there.
   chrome.tabs.query({}, (tabs) => {
-    const active = tabs.find((t) => t.active && t.url && SUPPORTED_HOSTS.some((h) => t.url.includes(h)));
-    const anySupported = active || tabs.find((t) => t.url && SUPPORTED_HOSTS.some((h) => t.url.includes(h)));
+    const active = tabs.find((t) => t.active && isSupportedUrl(t.url));
+    const anySupported = active || tabs.find((t) => isSupportedUrl(t.url));
     if (anySupported) {
       chrome.tabs.sendMessage(anySupported.id, { type: "zs-open-menu" });
       chrome.tabs.update(anySupported.id, { active: true });

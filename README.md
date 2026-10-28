@@ -82,8 +82,12 @@ VS Code's MCP server is configured locally by `start.bat`; it detects the open V
 | **Arena** | `arena.ai` | ✅ Supported | Use **Direct** mode |
 | **Meta AI** | `meta.ai` | ✅ Supported | |
 | **Ptero** | `ptero.pro` | ✅ Supported | |
+| **Perplexity** | `perplexity.ai` | ✅ Supported | Research-oriented answers; sign-in may be required |
+| **Mistral Vibe** | `chat.mistral.ai` | ✅ Supported | Formerly Le Chat |
+| **Microsoft Copilot** | `copilot.com` | ✅ Supported | Work/school experiences may use Microsoft domains |
+| **Poe** | `poe.com` | ✅ Supported | Choose a bot before starting a Snapgent session |
 
-> Provider activation is configured in `manifest.json` (`content_scripts` and `host_permissions`) and `PROVIDER_URLS` in `background.js`.
+> Provider activation is configured across `manifest.json`, `PROVIDER_URLS` in `background.js`, `SUPPORTED_HOSTS` in `popup.js`, and the in-chat AI list in `core/main.js`.
 
 ---
 
@@ -211,7 +215,7 @@ The Node smoke tests print `PASS`/`FAIL`; all test commands exit non-zero on fai
 
 - Keep site-specific DOM logic in `providers/`; the core should use `ZSProvider`.
 - The bridge listens on local port **17613**.
-- Provider URLs must stay in sync across `manifest.json` and `PROVIDER_URLS` in `background.js`.
+- Provider URLs must stay in sync across `manifest.json`, `background.js`, `popup.js`, and `core/main.js`.
 
 ---
 

@@ -94,6 +94,10 @@
     { name: "Meta AI", url: "https://www.meta.ai/" },
     { name: "Ptero", url: "https://ptero.pro/" },
     { name: "Grok", url: "https://grok.com/" },
+    { name: "Perplexity", url: "https://www.perplexity.ai/" },
+    { name: "Mistral Vibe", url: "https://chat.mistral.ai/chat" },
+    { name: "Microsoft Copilot", url: "https://copilot.com/" },
+    { name: "Poe", url: "https://poe.com/" },
   ];
   const TARGET_STORAGE_KEY = "zsSelectedMcpTarget";
   let selectedTargetId = "vscode";

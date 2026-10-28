@@ -1,8 +1,8 @@
-# snapgentV3 Free - AI Roblox Studio Agent (ChatGPT, Claude, DeepSeek, Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI, Ptero)
+# snapgentV3 Free - AI agent for ChatGPT, Claude, DeepSeek, Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI, Ptero, Perplexity, Mistral Vibe, Copilot, and Poe
 
-Control Roblox Studio with AI, for free. snapgentV3 turns a normal AI chat (ChatGPT, Claude, DeepSeek, Google Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI, or Ptero) into an agent that builds and scripts your Roblox game for you: just describe what you want, and it reads/edits scripts, runs Luau, inspects the game tree, and generates assets directly in Roblox Studio. No API key, no terminal, no coding required.
+snapgentV3 turns a supported web AI chat into an agent for VS Code or Roblox Studio. It connects ChatGPT, Claude, DeepSeek, Google Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI, Ptero, Perplexity, Mistral Vibe, Microsoft Copilot, and Poe to local MCP tools. No API key is needed for the browser-based providers.
 
-It's a Chrome/Edge browser extension plus a small local bridge that connects the chat to Roblox Studio or VS Code through MCP. **DeepSeek is the recommended provider.** ChatGPT, Claude, Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI and Ptero also work. Grok requires signing in to xAI. On ChatGPT and Claude, screenshots and image input are disabled in this integration. ChatGPT also summarises its own context in long sessions, so snapgentV3 re-states its operating instructions periodically (shown as a "Reminder" chip) to stop it forgetting it can run commands. Gemini and Kimi can be less stable: Gemini tends to stop using the Roblox tools in long sessions, and Kimi sometimes reaches for its own native tools instead of the Roblox commands. On Arena, keep the mode dropdown on **Direct** (snapgentV3 only supports Direct mode).
+It's a Chrome/Edge browser extension plus a local bridge that connects chat to Roblox Studio or VS Code through MCP. Provider behavior varies by model and session; Grok requires signing in to xAI, and Arena must use **Direct** mode. The new integrations share a common adapter and do not support image input yet.
 
 VS Code is the default **MCP target**. The bridge can start before VS Code, but open the intended project folder in VS Code before clicking **Start** in the chat bar. You can switch to Roblox Studio in the chat bar when its MCP server is enabled. The AI selector beside it opens the supported chat providers.
 
@@ -18,10 +18,11 @@ VS Code is the default **MCP target**. The bridge can start before VS Code, but 
 **Then set up the Bridge:**
 1. **Download the Bridge** from the [SnapgentV3 release](https://github.com/herdodp/snapgent-connector/releases/tag/V3)
 2. **Run the Bridge** - on Windows, double-click `start.bat`; it configures MCP automatically and can run before VS Code is open. Open the project folder in VS Code before clicking **Start** in the chat bar. Roblox Studio is optional: open a place and enable **Assistant AI** > **...** > **Manage MCP Servers** > **Enable Studio as MCP Server** to use that target too.
-4. macOS/Linux is not supported by the current package: only the Windows `bridge.exe` is included. `MacOS_Start.command` now exits with an explanatory message unless a native `bridge` binary or `bridge.py` is supplied.
-5. **Go to https://chat.deepseek.com** (recommended), https://chatgpt.com, https://claude.ai, https://gemini.google.com, https://grok.com, https://www.kimi.ai or https://kimi.ai, https://chat.z.ai, https://chat.qwen.ai, https://arena.ai, https://www.meta.ai, or https://ptero.pro, open a new chat (only works on these exact addresses; sign in to Grok first; on Arena use Direct mode)
-6. Click **Start session** in the snapgentV3 panel
-7. Type what you want to build
+3. Open a new chat on a supported site: DeepSeek, ChatGPT, Claude, Gemini, Grok, Kimi, Z.ai, Qwen, Arena, Meta AI, Ptero, Perplexity, Mistral Vibe, Microsoft Copilot, or Poe. Sign in where required; on Arena use Direct mode and on Poe choose the bot you want first.
+4. Click **Start session** in the snapgentV3 panel
+5. Type what you want to build
+
+The included bridge is Windows-only. macOS/Linux support requires a native `bridge` binary or `bridge.py`.
 
 ## Architecture (for contributors)
 
@@ -57,14 +58,17 @@ providers/ptero.js    same interface for Ptero / ptero.pro (textarea composer,
                       message and generation detection)                 (global ZSProvider)
 providers/grok.js     same interface for Grok / grok.com (ProseMirror
                       composer, message and generation detection)        (global ZSProvider)
+providers/extra-chat.js shared adapter for Perplexity, Mistral Vibe,
+                      Microsoft Copilot, and Poe                        (global ZSProvider)
 background.js         WebSocket to the local bridge (provider-agnostic)
 ```
 
 `core/main.js` never touches the host site's DOM directly - it only calls the
-`ZSProvider` interface. To integrate another AI site: write a new
-`providers/<site>.js` exporting the same interface, then add its URL pattern to
-`manifest.json` (`content_scripts` + `host_permissions`) and to
-`PROVIDER_URLS` in `background.js`. No core change required.
+`ZSProvider` interface. To integrate another AI site: write a provider adapter
+exporting the same interface, then add its URL to `manifest.json`,
+`PROVIDER_URLS` in `background.js`, `SUPPORTED_HOSTS` in `popup.js`, and
+`AI_SITES` in `core/main.js`. The four new sites use the shared
+`providers/extra-chat.js` adapter.
 
 Smoke tests (plain Node, no dependencies - run them from this directory):
 

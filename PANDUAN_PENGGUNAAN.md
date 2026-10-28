@@ -1,6 +1,6 @@
 # Dokumentasi & Panduan Penggunaan Snapgent (`snapgentV3`)
 
-Dokumen ini berisi panduan lengkap instalasi, arsitektur, daftar AI Agent yang didukung (termasuk **ChatGPT** dan **Claude**), referensi seluruh **24 MCP Tools VS Code**, serta panduan pemecahan masalah (**Troubleshooting**).
+Dokumen ini berisi panduan lengkap instalasi, arsitektur, daftar **15 AI Agent** yang didukung, referensi seluruh **24 MCP Tools VS Code**, serta panduan pemecahan masalah (**Troubleshooting**).
 
 ---
 
@@ -51,9 +51,9 @@ Local Bridge bertugas menghubungkan ekstensi browser dengan **VS Code** dan **Ro
 
 ---
 
-## 4. Daftar Lengkap 11 AI Agent yang Didukung
+## 4. Daftar Lengkap 15 AI Agent yang Didukung
 
-Anda dapat menggunakan Snapgent di **11 platform AI web** berikut:
+Anda dapat menggunakan Snapgent di **15 platform AI web** berikut:
 
 | No | AI Agent | Alamat URL | File Provider | Keterangan |
 | :--- | :--- | :--- | :--- | :--- |
@@ -68,6 +68,10 @@ Anda dapat menggunakan Snapgent di **11 platform AI web** berikut:
 | 9 | **LMSYS Chatbot Arena** | `https://arena.ai/text/direct` | `providers/arena.js` | Gunakan mode **Direct Chat** untuk mengakses berbagai model secara gratis. |
 | 10 | **Meta AI (Llama)** | `https://www.meta.ai/` | `providers/meta.js` | Berbasis model Llama dari Meta. |
 | 11 | **Ptero** | `https://ptero.pro/` | `providers/ptero.js` | Alternatif chat AI cepat dan ringan. |
+| 12 | **Perplexity** | `https://www.perplexity.ai/` | `providers/extra-chat.js` | Situs pencarian AI; login mungkin diperlukan. |
+| 13 | **Mistral Vibe** | `https://chat.mistral.ai/chat` | `providers/extra-chat.js` | Nama baru untuk Le Chat; fokus assistant dan coding. |
+| 14 | **Microsoft Copilot** | `https://copilot.com/` | `providers/extra-chat.js` | Mendukung domain Copilot personal dan beberapa domain Microsoft. |
+| 15 | **Poe** | `https://poe.com/` | `providers/extra-chat.js` | Pilih bot/model Poe sebelum memulai sesi Snapgent. |
 
 ---
 

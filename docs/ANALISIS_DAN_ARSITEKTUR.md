@@ -70,6 +70,10 @@ Host dan content script ditentukan di `snapgent-extension/manifest.json`; pemeta
 - Meta AI: `meta.ai`, `www.meta.ai`
 - Ptero: `ptero.pro`
 - Grok: `grok.com`
+- Perplexity: `perplexity.ai`, `www.perplexity.ai`
+- Mistral Vibe: `chat.mistral.ai` (formerly Le Chat)
+- Microsoft Copilot: `copilot.com`, `copilot.microsoft.com`, `copilot.cloud.microsoft`, `m365.cloud.microsoft`
+- Poe: `poe.com`
 
 DOM situs AI dapat berubah dan memerlukan pembaruan selector atau mekanisme submit provider.
 
@@ -99,11 +103,12 @@ Server MCP terpilih (VS Code atau Roblox jika tersedia)
 - `core/parser.js`: parser command, format legacy, dan normalisasi feedback.
 - `core/main.js`: state sesi, start/stop, agent loop, eksekusi, pemulihan, UI dan penyamaran prompt/hasil tool.
 - `providers/*.js`: selector DOM, pembacaan pesan, submit input, dan deteksi generasi per situs.
+- `providers/extra-chat.js`: adaptor bersama untuk Perplexity, Mistral Vibe, Microsoft Copilot, dan Poe; provider ini belum mendukung gambar.
 - `providers/*-net.js` / `providers/*-cm.js`: tap MAIN world untuk data stream atau code block yang tidak lengkap pada DOM.
 - `popup.html`, `popup.js`: pengaturan ekstensi dan server/provider.
 - `overlay.css`: tampilan bar dan feedback.
 
-Provider baru harus mengikuti antarmuka yang dipakai core. Integrasi memerlukan provider script, entri content script dan host pada manifest, serta pemetaan URL pada background. Perubahan provider sebaiknya tidak mengubah API provider lain.
+Provider baru harus mengikuti antarmuka yang dipakai core. Integrasi memerlukan provider script, entri content script dan host pada manifest, pemetaan URL pada background, daftar host popup, serta entri di pemilih AI pada `core/main.js`. Perubahan provider sebaiknya tidak mengubah API provider lain.
 
 ### Bridge dan protokol MCP
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "snapgentV3 × Roblox Studio Agent",
   "version": "3.0.0",
-  "description": "Turn ChatGPT, Claude, DeepSeek, Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI or Ptero into a Roblox Studio agent that drives Studio through a local bridge.",
+  "description": "Connect ChatGPT, Claude, DeepSeek, Gemini, Grok, Kimi, GLM, Qwen, Arena, Meta AI, Ptero, Perplexity, Mistral Vibe, Microsoft Copilot, and Poe to local MCP tools.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://chat.deepseek.com/*",
@@ -21,6 +21,15 @@
     "https://meta.ai/*",
     "https://ptero.pro/*",
     "https://grok.com/*",
+    "https://perplexity.ai/*",
+    "https://www.perplexity.ai/*",
+    "https://chat.mistral.ai/*",
+    "https://copilot.com/*",
+    "https://www.copilot.com/*",
+    "https://copilot.microsoft.com/*",
+    "https://copilot.cloud.microsoft/*",
+    "https://m365.cloud.microsoft/*",
+    "https://poe.com/*",
     "http://127.0.0.1/*",
     "ws://127.0.0.1/*"
   ],
@@ -117,6 +126,19 @@
     {
       "matches": ["https://chat.qwen.ai/*"],
       "js": ["core/config.js", "core/parser.js", "providers/qwen.js", "core/main.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://perplexity.ai/*", "https://www.perplexity.ai/*",
+        "https://chat.mistral.ai/*",
+        "https://copilot.com/*", "https://www.copilot.com/*",
+        "https://copilot.microsoft.com/*", "https://copilot.cloud.microsoft/*",
+        "https://m365.cloud.microsoft/*",
+        "https://poe.com/*"
+      ],
+      "js": ["core/config.js", "core/parser.js", "providers/extra-chat.js", "core/main.js"],
       "css": ["overlay.css"],
       "run_at": "document_idle"
     }

@@ -2,6 +2,12 @@
 
 All notable changes to snapgentV3 Free are documented here.
 
+## [Unreleased]
+
+### Added
+- Add Perplexity, Mistral Vibe, Microsoft Copilot, and Poe as browser AI providers.
+- Add a shared adapter for the new providers and list them in the in-chat AI switcher.
+
 ## [3.0.0] - 2026-10-25
 
 ### Changed
