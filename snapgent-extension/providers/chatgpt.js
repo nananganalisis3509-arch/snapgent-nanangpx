@@ -67,13 +67,13 @@ const ZSProvider = (() => {
     userRole: "user",
     assistantRole: "assistant",
     reply: ".markdown",
-    editor: '#prompt-textarea,[data-mobile-composer-prompt],textarea[aria-label="Chat with ChatGPT"]',
+    editor: '#prompt-textarea, .ProseMirror[contenteditable], [data-mobile-composer-prompt], textarea[aria-label="Chat with ChatGPT"]',
     // The ONE submit control; its data-testid says whether it is currently a
     // send or a stop button (see isStopBtn). Id first - it survives testid churn.
-    submitBtn: "#composer-submit-button, button[data-testid='send-button'], button[data-testid='stop-button'], button[aria-label='Send message'], button[aria-label*='Stop'], button[aria-label*='stop'], button[aria-label*='Interrompre'], button[aria-label*='Arrêter']",
+    submitBtn: "#composer-submit-button, button[data-testid='send-button'], button[data-testid='composer-send-button'], button[data-testid='stop-button'], button[data-testid='composer-stop-button'], button[aria-label='Send message'], button[aria-label='Send prompt'], button[aria-label*='Kirim'], button[aria-label*='Stop'], button[aria-label*='stop'], button[aria-label*='Hentikan'], button[aria-label*='Interrompre'], button[aria-label*='Arrêter']",
     // Kept for installSendHooks, which needs to recognise a click on the native
     // stop control wherever it lives.
-    stopBtn: "button[data-testid='stop-button']",
+    stopBtn: "button[data-testid='stop-button'], button[data-testid='composer-stop-button']",
     codeWrap: "pre",
     // composer frame: the <form> that wraps the ProseMirror editor.
     errorSurfaces: '[role="alert"],[data-testid*="error"],[class*="error-message"]',
@@ -221,13 +221,44 @@ const ZSProvider = (() => {
   const assistantItems = () => allItems().filter(isAssistantItem);
   const assistantCount = () => assistantItems().length;
   const userCount = () => allItems().filter(isUserItem).length;
+  const isEditorVisible = (ed) => {
+    if (!ed) return false;
+    try {
+      const cs = getComputedStyle(ed);
+      if (cs && (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0")) return false;
+    } catch {}
+    return typeof ed.getClientRects === "function" ? ed.getClientRects().length > 0 : true;
+  };
+  const isFallbackTextarea = (ed) => {
+    if (!ed || (!(ed instanceof HTMLTextAreaElement) && ed.tagName !== "TEXTAREA")) return false;
+    const cls = String(ed.className || "");
+    if (/fallbackTextarea|sr-only|hidden/i.test(cls)) return true;
+    if (ed.getAttribute && ed.getAttribute("name") === "prompt-textarea" && ed.id !== "mobile-composer-prompt") {
+      // ChatGPT renders a hidden <textarea name="prompt-textarea"> alongside
+      // the live ProseMirror <div id="prompt-textarea" contenteditable="true">.
+      const hasRich = [...document.querySelectorAll(S.editor)].some(
+        (el) => !(el instanceof HTMLTextAreaElement) && el.tagName !== "TEXTAREA"
+      );
+      if (hasRich) return true;
+    }
+    return false;
+  };
   const getEditor = () => {
-    const editors = [...document.querySelectorAll(S.editor)];
-    return editors.find((ed) => ed.getClientRects().length > 0) || editors[0] || null;
+    const editors = [...document.querySelectorAll(S.editor)].filter((ed) => !isFallbackTextarea(ed));
+    if (!editors.length) return null;
+    // Prefer ProseMirror / contenteditable (non-TEXTAREA) editors over any
+    // fallback <textarea> that ChatGPT keeps in the composer DOM.
+    const rich = editors.filter((ed) => !(ed instanceof HTMLTextAreaElement) && ed.tagName !== "TEXTAREA");
+    if (rich.length) {
+      return rich.find(isEditorVisible) || rich[0];
+    }
+    return editors.find(isEditorVisible) || editors[0] || null;
   };
   const editorText = () => {
     const e = getEditor();
-    return e ? (e instanceof HTMLTextAreaElement ? e.value : e.textContent || "") : "";
+    if (!e) return "";
+    if (e instanceof HTMLTextAreaElement || e.tagName === "TEXTAREA") return e.value || "";
+    return e.innerText !== undefined ? e.innerText : (e.textContent || "");
   };
 
   const lastAssistant = () => {
@@ -310,10 +341,13 @@ const ZSProvider = (() => {
 
   function barMount() {
     const ed = getEditor();
-    if (!ed) return null;
+    if (!ed || typeof ed.closest !== "function") return null;
     const box = ed.closest("[class*='composer-surface']");
     if (!box) return null;
     const area = topArea(box);
+    let display = "";
+    try { display = getComputedStyle(box).display || ""; } catch {}
+    if (display.includes("grid") && !area) return null;
     if (area) {
       const bar = document.getElementById("zs-bar");
       if (bar && bar.style.gridArea !== area) bar.style.gridArea = area;
@@ -321,13 +355,22 @@ const ZSProvider = (() => {
     // Skip our own bar if already mounted, otherwise we'd insert it before itself.
     let before = box.firstElementChild;
     if (before && before.id === "zs-bar") before = before.nextElementSibling;
-    return { parent: box, before, inside: true };
+    return { parent: box, before, inside: true, gridArea: area || "" };
   }
 
   function barAnchor() {
     const ed = getEditor();
-    if (!ed || !(ed instanceof HTMLTextAreaElement)) return null;
-    return ed.closest("form") || ed.closest("[data-composer-primary]") || ed;
+    if (!ed) return null;
+    if (typeof ed.closest === "function") {
+      return (
+        ed.closest("[class*='composer-surface']") ||
+        ed.closest("#composer-background") ||
+        ed.closest("form") ||
+        ed.closest("[data-composer-primary]") ||
+        ed
+      );
+    }
+    return ed;
   }
 
   // ── Input lock ────────────────────────────────────────────────────────────
@@ -357,13 +400,26 @@ const ZSProvider = (() => {
   // sendButton() cheerfully returns the stop square and every guarded click is
   // refused. That is exactly what stranded a tool result in the composer and
   // raised "ChatGPT did not accept the injected message after 4 attempts".
-  const isStopBtn = (b) => !!b && (
-    b.getAttribute("data-testid") === "stop-button" ||
-    /\b(stop|interrompre|arrêter)\b/i.test(b.getAttribute("aria-label") || "")
-  );
+  const isStopBtn = (b) => {
+    if (!b) return false;
+    const tid = (b.getAttribute && b.getAttribute("data-testid")) || "";
+    if (tid === "stop-button" || tid === "composer-stop-button") return true;
+    const aria = (b.getAttribute && b.getAttribute("aria-label")) || "";
+    return /\b(stop|interrompre|arrêter|hentikan|berhenti)\b/i.test(aria);
+  };
+  const isBtnVisible = (b) => {
+    if (!b) return false;
+    if (b.offsetParent !== null) return true;
+    return typeof b.getClientRects === "function" && b.getClientRects().length > 0;
+  };
   const submitButton = () => {
+    if (typeof document.querySelectorAll === "function") {
+      const all = [...document.querySelectorAll(S.submitBtn)];
+      const found = all.find(isBtnVisible);
+      if (found) return found;
+    }
     const b = document.querySelector(S.submitBtn);
-    return b && b.offsetParent !== null ? b : null;
+    return isBtnVisible(b) ? b : null;
   };
   const sendButton = () => {
     const b = submitButton();
@@ -591,7 +647,7 @@ const ZSProvider = (() => {
   // Fallback: type it. Yielding does not make this faster - it keeps the page
   // alive while it happens, so the user can still click (and Stop still works).
   async function typeEditorText(ed, text) {
-    if (ed instanceof HTMLTextAreaElement) {
+    if (ed instanceof HTMLTextAreaElement || ed.tagName === "TEXTAREA") {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
       if (setter && setter.set) setter.set.call(ed, text);
       else ed.value = text;
@@ -600,16 +656,47 @@ const ZSProvider = (() => {
         inputType: "insertText",
         data: text,
       }));
+      try { ed.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
       return;
     }
     selectAll(ed);
     const lines = String(text).split("\n");
     const t0 = Date.now();
     for (let i = 0; i < lines.length; i++) {
+      if (typeof document.activeElement !== "undefined" && document.activeElement !== ed && ed.focus) {
+        ed.focus();
+      }
       if (lines[i]) document.execCommand("insertText", false, lines[i]);
       // insertLineBreak, never a synthetic Enter: Enter is what SENDS on ChatGPT.
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
       if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
+    }
+    // If execCommand failed to populate ProseMirror (e.g. unfocused tab or
+    // browser blocked execCommand after contenteditable toggle), populate
+    // paragraph nodes directly so ProseMirror's MutationObserver + InputEvent
+    // syncs the document state and enables the Send button.
+    const current = (ed.innerText !== undefined ? ed.innerText : (ed.textContent || "")).trim();
+    if (!current && String(text).trim()) {
+      diag("send.domFallback", { len: String(text).length });
+      try {
+        while (ed.firstChild) ed.removeChild(ed.firstChild);
+        for (const line of lines) {
+          const p = document.createElement("p");
+          if (line) p.textContent = line;
+          else p.appendChild(document.createElement("br"));
+          ed.appendChild(p);
+        }
+      } catch {
+        ed.textContent = text;
+      }
+      try {
+        ed.dispatchEvent(new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        }));
+      } catch {}
     }
     if (lines.length > INSERT_CHUNK_LINES) diag("send.insertDone", { lines: lines.length, ms: Date.now() - t0 });
   }
@@ -625,15 +712,19 @@ const ZSProvider = (() => {
     if (!ed) throw new Error("ChatGPT input box not found");
     text = truncateForSend(text);
     const relock = _locked;
+    const isTextarea = ed instanceof HTMLTextAreaElement || ed.tagName === "TEXTAREA";
     const setEditable = (editable) => {
-      if (ed instanceof HTMLTextAreaElement) {
+      if (isTextarea) {
         if (editable) ed.removeAttribute("readonly");
         else ed.setAttribute("readonly", "");
       } else {
         ed.setAttribute("contenteditable", editable ? "true" : "false");
       }
     };
-    if (relock) setEditable(true); // injection needs the composer to be editable
+    if (relock) {
+      setEditable(true); // injection needs the composer to be editable
+      if (!isTextarea) await sleep(20);
+    }
     try {
       await setEditorText(ed, text);
       // Attach images LAST, right before the send click - see gemini.js/deepseek.js
@@ -653,7 +744,10 @@ const ZSProvider = (() => {
       }
       // Wait for the control to be in its SEND role (proof ProseMirror registered
       // the text, and that no generation is in flight).
-      await waitFor(() => !!sendButton(), 1500);
+      await waitFor(() => {
+        const b = sendButton();
+        return !!b && !b.disabled && b.getAttribute("aria-disabled") !== "true";
+      }, 2000);
       // Still not a send button? Either a generation really is running (in which
       // case unwedge refuses and we fall through), or the control is stuck in its
       // stop role with nothing generating - the case that stranded the result.
@@ -663,11 +757,20 @@ const ZSProvider = (() => {
       // Enter is refused too, so return now and let scanError surface the reason
       // instead of burning the caller's retries in silence.
       if (btn && btn.disabled) { diag("send.disabled", {}); return; }
-      if (btn) { btn.click(); return; }
+      if (btn) {
+        btn.click();
+        await waitFor(() => editorText().trim() === "" || !!stopButton(), 1200);
+        return;
+      }
       // Fallback: Enter sends in ChatGPT's composer.
       const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
+      const form = typeof ed.closest === "function" ? ed.closest("form") : null;
+      if (form && typeof form.requestSubmit === "function" && editorText().trim() !== "") {
+        try { form.requestSubmit(); } catch {}
+      }
+      await waitFor(() => editorText().trim() === "" || !!stopButton(), 1200);
     } finally {
       if (relock) setEditable(false);
     }

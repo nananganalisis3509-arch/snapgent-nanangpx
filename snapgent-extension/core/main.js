@@ -3473,6 +3473,9 @@
           bar.classList.add("zs-bar-inline");
           bar.style.cssText = ""; // drop any leftover float positioning
         }
+        if (mount.gridArea && bar.style.gridArea !== mount.gridArea) {
+          bar.style.gridArea = mount.gridArea;
+        }
         // Transparent (blends in) when mounted INSIDE the input box; surface card
         // when mounted ABOVE it. The provider's barMount() signals which via .inside.
         bar.classList.toggle("zs-bar-inside", !!mount.inside);

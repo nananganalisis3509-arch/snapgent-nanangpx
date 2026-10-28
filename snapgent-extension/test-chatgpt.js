@@ -57,14 +57,32 @@ Object.defineProperty(StubTextArea.prototype, "value", {
 });
 global.document = {
   querySelector: (selector) => selector.includes("Send message") ? submitControl : null,
-  querySelectorAll: (selector) => selector.includes("mobile-composer-prompt") ? composerNodes : [],
+  querySelectorAll: (selector) => {
+    if (selector.includes("Send message")) return submitControl ? [submitControl] : [];
+    if (selector.includes("mobile-composer-prompt")) return composerNodes;
+    return [];
+  },
+  createElement: (tag) => ({
+    tagName: tag.toUpperCase(),
+    textContent: "",
+    childNodes: [],
+    appendChild(c) { this.childNodes.push(c); },
+  }),
+  createRange: () => ({ selectNodeContents() {} }),
+  execCommand: () => false,
   addEventListener: () => {},
   dispatchEvent: () => {},
   documentElement: { classList: { contains: () => false } },
   body: null,
 };
-global.window = { location: { pathname: "/" }, addEventListener: () => {}, HTMLTextAreaElement: StubTextArea };
+global.window = {
+  location: { pathname: "/" },
+  addEventListener: () => {},
+  HTMLTextAreaElement: StubTextArea,
+  getSelection: () => ({ removeAllRanges() {}, addRange() {} }),
+};
 global.HTMLTextAreaElement = StubTextArea;
+global.Event = class { constructor(type, options) { this.type = type; Object.assign(this, options); } };
 global.InputEvent = class { constructor(type, options) { this.type = type; Object.assign(this, options); } };
 global.location = global.window.location;
 global.CustomEvent = class { constructor(t) { this.type = t; } };
@@ -167,6 +185,62 @@ ok("mobile textarea text can be read", P.editorText() === "");
   ok("mobile composer relocks after sending", mobileComposer.getAttribute("readonly") === "");
   P.setInputLock(false);
   ok("mobile composer unlocks after startup", mobileComposer.getAttribute("readonly") === null);
+
+  // Desktop ChatGPT renders BOTH a hidden fallback <textarea id="prompt-textarea">
+  // and the live ProseMirror <div id="prompt-textarea" contenteditable="true">.
+  // getEditor() must always select the ProseMirror div (even when locked) and
+  // never type into the dead fallback textarea.
+  const fallbackTextarea = Object.assign(new StubTextArea(), {
+    tagName: "TEXTAREA",
+    id: "prompt-textarea",
+    className: "wcDTda_fallbackTextarea",
+    attrs: { name: "prompt-textarea" },
+    getClientRects: () => [{ width: 1, height: 1 }],
+    getAttribute(name) { return this.attrs[name] ?? null; },
+  });
+  const proseMirrorDiv = {
+    tagName: "DIV",
+    id: "prompt-textarea",
+    className: "ProseMirror",
+    attrs: { contenteditable: "true" },
+    childNodes: [],
+    get firstChild() { return this.childNodes[0] || null; },
+    removeChild(c) {
+      const idx = this.childNodes.indexOf(c);
+      if (idx >= 0) this.childNodes.splice(idx, 1);
+    },
+    appendChild(c) { this.childNodes.push(c); },
+    get textContent() {
+      return this.childNodes.map((c) => c.textContent || "").join("\n");
+    },
+    set textContent(v) {
+      this.childNodes = [{ textContent: String(v) }];
+    },
+    focus() {},
+    getClientRects: () => [{ width: 600, height: 48 }],
+    closest: (selector) => selector === "form" ? composerForm : null,
+    setAttribute(name, value) { this.attrs[name] = value; },
+    removeAttribute(name) { delete this.attrs[name]; },
+    getAttribute(name) { return this.attrs[name] ?? null; },
+    dispatchEvent() {},
+  };
+  submitControl = {
+    offsetParent: {},
+    disabled: false,
+    getAttribute: () => null,
+    click() { proseMirrorDiv.childNodes = []; },
+  };
+  composerNodes = [fallbackTextarea, proseMirrorDiv];
+  ok("ProseMirror editor is preferred over hidden fallback textarea", P.getEditor() === proseMirrorDiv);
+  P.setInputLock(true);
+  ok("ProseMirror editor stays selected while locked (contenteditable=false)", P.getEditor() === proseMirrorDiv);
+  ok("ProseMirror composer provides a fallback bar anchor", P.barAnchor() === composerForm);
+  await P.typeAndSend("line 1\nline 2");
+  ok("fallback textarea was never written to", fallbackTextarea.value === "");
+  ok("ProseMirror editor submitted via DOM fallback and cleared", P.editorText() === "");
+  ok("ProseMirror editor relocks after sending", proseMirrorDiv.getAttribute("contenteditable") === "false");
+  P.setInputLock(false);
+  ok("ProseMirror editor unlocks after startup", proseMirrorDiv.getAttribute("contenteditable") === "true");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
