@@ -12,18 +12,23 @@ const ZSProvider = (() => {
 
   const S = {
     user: '[data-testid="user-message"]',
-    assistant: '[data-testid="assistant-message"]',
+    assistant: '[data-testid="assistant-message"], .font-claude-message, .font-claude-response, [data-is-streaming]',
     editor: [
+      '[data-testid="chat-input"][contenteditable]',
       '[data-testid="chat-input"] [contenteditable]',
+      'fieldset [contenteditable]',
       '[contenteditable][data-placeholder]',
       '.ProseMirror[contenteditable]',
+      'div[contenteditable="true"]',
       'div[contenteditable]',
+      'textarea[data-testid="chat-input-ssr"]',
     ].join(","),
     send: [
       'button[data-testid*="send"]',
       'button[data-testid="send-button"]',
       'button[aria-label*="Send"]',
       'button[aria-label*="send"]',
+      'button[aria-label*="Kirim"]',
       '[role="button"][data-testid*="send"]',
       '[role="button"][aria-label*="Send"]',
       '[role="button"][aria-label*="send"]',
@@ -32,6 +37,7 @@ const ZSProvider = (() => {
       'button[data-testid="stop-button"]',
       'button[aria-label*="Stop"]',
       'button[aria-label*="stop"]',
+      'button[aria-label*="Hentikan"]',
     ].join(","),
     thinking: '[data-testid*="thinking"],[class*="thinking"],[class*="reasoning"]',
     errors: '[role="alert"],[data-testid*="error"],[class*="error-message"]',
@@ -45,31 +51,51 @@ const ZSProvider = (() => {
     STABLE_MS: 10000,
     RESPONSE_TIMEOUT_MS: 300000,
   };
-  const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
+  const visible = (el) => !!el && el.isConnected !== false && (typeof el.getClientRects === "function" ? el.getClientRects().length > 0 : true);
+  const BLOCK_TAGS = /^(?:P|DIV|PRE|LI|UL|OL|BLOCKQUOTE|H[1-6]|TABLE|TR|SECTION|ARTICLE|HR)$/;
   const without = (root, excludeSel) => {
     if (!root) return "";
     const skip = [".zs-chip", S.thinking, excludeSel].filter(Boolean).join(",");
     let text = "";
+    const breakLine = () => { if (text && !text.endsWith("\n")) text += "\n"; };
     const visit = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
+      if (node.nodeType === 3) {
         text += node.nodeValue || "";
         return;
       }
-      if (node.nodeType !== Node.ELEMENT_NODE) return;
-      if (node.matches(skip)) return;
-      for (const child of node.childNodes) visit(child);
+      if (node.nodeType !== 1) return;
+      if (node.matches && node.matches(skip)) return;
+      if (node.tagName === "BR") {
+        text += "\n";
+        return;
+      }
+      if (node.classList && node.classList.contains("cm-line")) {
+        for (const child of node.childNodes || []) visit(child);
+        text += "\n";
+        return;
+      }
+      const isBlock = BLOCK_TAGS.test(node.tagName || "");
+      if (isBlock) breakLine();
+      for (const child of node.childNodes || []) visit(child);
+      if (isBlock) breakLine();
     };
     visit(root);
     return text;
   };
 
+  const TURN_SEL = `${S.user},${S.assistant}`;
   const isAssistantItem = (item) => !!item &&
-    (item.matches(S.assistant) || !!item.querySelector(S.assistant));
+    ((item.matches && item.matches(S.assistant)) || !!(item.querySelector && item.querySelector(S.assistant)));
   const isUserItem = (item) => !!item &&
-    (item.matches(S.user) || (!isAssistantItem(item) && !!item.querySelector(S.user)));
+    ((item.matches && item.matches(S.user)) || (!isAssistantItem(item) && !!(item.querySelector && item.querySelector(S.user))));
   const allItems = () => {
-    const items = [...document.querySelectorAll(`${S.user},${S.assistant}`)];
-    return items.filter((item) => !item.closest("#zs-root"));
+    const items = [...document.querySelectorAll(TURN_SEL)]
+      .filter((item) => !(item.closest && item.closest("#zs-root")));
+    // Deduplicate nested matches (e.g. [data-is-streaming] wrapping .font-claude-message)
+    return items.filter((item) => {
+      const parent = item.parentElement;
+      return !(parent && parent.closest && parent.closest(TURN_SEL));
+    });
   };
   const assistantItems = () => allItems().filter(isAssistantItem);
   const assistantCount = () => assistantItems().length;
@@ -80,7 +106,11 @@ const ZSProvider = (() => {
   };
   const bodyOf = (item) => {
     if (!item) return null;
-    return item.matches(S.assistant) ? item : item.querySelector(S.assistant);
+    if (item.querySelector) {
+      const inner = item.querySelector('[data-testid="assistant-message"], .font-claude-message, .font-claude-response');
+      if (inner) return inner;
+    }
+    return (item.matches && item.matches(S.assistant)) ? item : (item.querySelector ? item.querySelector(S.assistant) : item);
   };
   const itemText = (item) => isAssistantItem(item)
     ? without(bodyOf(item))
@@ -93,22 +123,32 @@ const ZSProvider = (() => {
 
   function getEditor() {
     if (locked && visible(lockedEditor) &&
-        !lockedEditor.closest("#zs-root") && !lockedEditor.closest(S.user) &&
-        !lockedEditor.closest(S.assistant)) return lockedEditor;
-    for (const editor of document.querySelectorAll(S.editor)) {
-      if (!editor.closest("#zs-root") && !editor.closest(S.user) &&
-          !editor.closest(S.assistant) && visible(editor)) return editor;
-    }
-    return null;
+        !(lockedEditor.closest && lockedEditor.closest("#zs-root")) &&
+        !(lockedEditor.closest && lockedEditor.closest(S.user)) &&
+        !(lockedEditor.closest && lockedEditor.closest(S.assistant))) return lockedEditor;
+    const candidates = [...document.querySelectorAll(S.editor)].filter(
+      (editor) => !(editor.closest && editor.closest("#zs-root")) &&
+                  !(editor.closest && editor.closest(S.user)) &&
+                  !(editor.closest && editor.closest(S.assistant)) &&
+                  visible(editor)
+    );
+    const rich = candidates.filter((ed) => !(ed instanceof HTMLTextAreaElement) && ed.tagName !== "TEXTAREA");
+    return rich[0] || candidates[0] || null;
   }
   const editorText = () => {
     const editor = getEditor();
-    return editor ? (editor.innerText || editor.textContent || "") : "";
+    if (!editor) return "";
+    if (editor instanceof HTMLTextAreaElement || editor.tagName === "TEXTAREA") return editor.value || "";
+    return editor.innerText !== undefined ? editor.innerText : (editor.textContent || "");
   };
   const isFreshChat = () => chatIsEmpty() && !!getEditor();
   const composerFrame = () => {
     const editor = getEditor();
-    return editor && (editor.closest("form") || editor.parentElement);
+    if (!editor) return null;
+    if (typeof editor.closest === "function") {
+      return editor.closest("fieldset") || editor.closest("form") || editor.parentElement;
+    }
+    return editor.parentElement || null;
   };
   const barMount = () => {
     const frame = composerFrame();
@@ -118,13 +158,29 @@ const ZSProvider = (() => {
     let card = frame;
     const editor = getEditor();
     for (let el = editor, i = 0; el && el !== document.body && i < 12; el = el.parentElement, i++) {
-      const cs = getComputedStyle(el);
-      if (parseFloat(cs.borderTopLeftRadius) >= 16 && parseFloat(cs.borderTopWidth) > 0) {
-        card = el;
-        break;
-      }
+      try {
+        const cs = getComputedStyle(el);
+        if (parseFloat(cs.borderTopLeftRadius) >= 16 && parseFloat(cs.borderTopWidth) > 0) {
+          card = el;
+          break;
+        }
+      } catch {}
     }
     return card && card.parentElement ? { parent: card.parentElement, before: card } : null;
+  };
+  const barAnchor = () => {
+    const editor = getEditor();
+    if (!editor) return null;
+    if (typeof editor.closest === "function") {
+      return (
+        editor.closest("fieldset") ||
+        editor.closest("form") ||
+        editor.closest('[data-testid="chat-input-grid-container"]') ||
+        editor.parentElement ||
+        editor
+      );
+    }
+    return editor;
   };
 
   const ids = new WeakMap();
@@ -177,7 +233,8 @@ const ZSProvider = (() => {
     return null;
   };
   const stopButton = () => [...document.querySelectorAll(S.stop)].find(visible) || null;
-  const isHardGenerating = () => !!stopButton();
+  const isHardGenerating = () =>
+    !!stopButton() || !!(document.querySelector && document.querySelector('[data-is-streaming="true"]'));
   const isGenerating = () => {
     sampleStream();
     return isHardGenerating() || (sampledLen > 0 && Date.now() - grewAt < timings.GEN_IDLE_MS);
@@ -209,47 +266,109 @@ const ZSProvider = (() => {
     const editor = on ? getEditor() : (visible(lockedEditor) ? lockedEditor : getEditor());
     locked = on;
     lockedEditor = on ? editor : null;
-    if (editor) editor.setAttribute("contenteditable", on ? "false" : "true");
-  }
-  function writeText(editor, text) {
-    editor.focus();
-    editor.setAttribute("contenteditable", "true");
-    const selection = window.getSelection();
-    if (selection) {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      selection.removeAllRanges();
-      selection.addRange(range);
+    if (!editor) return;
+    if (editor instanceof HTMLTextAreaElement || editor.tagName === "TEXTAREA") {
+      if (on) editor.setAttribute("readonly", "");
+      else editor.removeAttribute("readonly");
+    } else {
+      editor.setAttribute("contenteditable", on ? "false" : "true");
     }
-    const inserted = document.execCommand("insertText", false, text);
-    if (!inserted || editorText().trim() !== text.trim()) {
-      editor.textContent = text;
+  }
+  const INSERT_CHUNK_LINES = 25;
+  async function writeText(editor, text) {
+    if (editor instanceof HTMLTextAreaElement || editor.tagName === "TEXTAREA") {
+      editor.removeAttribute("readonly");
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+      if (setter && setter.set) setter.set.call(editor, text);
+      else editor.value = text;
       editor.dispatchEvent(new InputEvent("input", {
         bubbles: true,
         inputType: "insertText",
         data: text,
       }));
+      try { editor.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+      return;
     }
-    if (locked) editor.setAttribute("contenteditable", "false");
+    editor.setAttribute("contenteditable", "true");
+    await sleep(20);
+    if (editor.focus) editor.focus();
+    const selection = typeof window.getSelection === "function" ? window.getSelection() : null;
+    if (selection && typeof document.createRange === "function") {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    const lines = String(text).split("\n");
+    if (typeof document.execCommand === "function") {
+      for (let i = 0; i < lines.length; i++) {
+        if (typeof document.activeElement !== "undefined" && document.activeElement !== editor && editor.focus) {
+          editor.focus();
+        }
+        if (lines[i]) document.execCommand("insertText", false, lines[i]);
+        if (i < lines.length - 1) document.execCommand("insertLineBreak");
+        if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
+      }
+    }
+    const current = (editor.innerText !== undefined ? editor.innerText : (editor.textContent || "")).trim();
+    if (!current && String(text).trim()) {
+      diag("send.domFallback", { len: String(text).length });
+      try {
+        while (editor.firstChild) editor.removeChild(editor.firstChild);
+        for (const line of lines) {
+          const p = document.createElement("p");
+          if (line) p.textContent = line;
+          else p.appendChild(document.createElement("br"));
+          editor.appendChild(p);
+        }
+      } catch {
+        editor.textContent = text;
+      }
+      try {
+        editor.dispatchEvent(new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        }));
+      } catch {}
+    }
   }
   async function typeAndSend(text) {
     const editor = getEditor();
     if (!editor) throw new Error("Claude input box not found");
     const beforeUsers = userCount();
-    writeText(editor, text);
-    const ready = await waitFor(() => {
+    const relock = locked;
+    try {
+      await writeText(editor, text);
+      await waitFor(() => {
+        const button = sendButton();
+        return !!button && !button.disabled && button.getAttribute("aria-disabled") !== "true";
+      }, 4000);
       const button = sendButton();
-      return !!button && !button.disabled && button.getAttribute("aria-disabled") !== "true";
-    }, 10000);
-    const button = sendButton();
-    if (!ready || !button || button.disabled ||
-        button.getAttribute("aria-disabled") === "true") {
-      throw new Error("Claude send button did not become available");
+      if (button && !button.disabled && button.getAttribute("aria-disabled") !== "true") {
+        button.click();
+      } else {
+        const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+        editor.dispatchEvent(new KeyboardEvent("keydown", o));
+        editor.dispatchEvent(new KeyboardEvent("keyup", o));
+        const form = typeof editor.closest === "function" ? editor.closest("form") : null;
+        if (form && typeof form.requestSubmit === "function" && editorText().trim() !== "") {
+          try { form.requestSubmit(); } catch {}
+        }
+      }
+      await waitFor(() =>
+        editorText().trim() === "" || userCount() > beforeUsers || isHardGenerating(),
+      5000);
+    } finally {
+      if (relock) {
+        if (editor instanceof HTMLTextAreaElement || editor.tagName === "TEXTAREA") {
+          editor.setAttribute("readonly", "");
+        } else {
+          editor.setAttribute("contenteditable", "false");
+        }
+      }
     }
-    button.click();
-    await waitFor(() =>
-      editorText().trim() === "" || userCount() > beforeUsers || isHardGenerating(),
-    5000);
   }
   function stopGeneration() {
     const button = stopButton();
@@ -334,16 +453,17 @@ const ZSProvider = (() => {
   return {
     id: "claude",
     displayName: "Claude",
-    sendRetryLimit: 1,
+    sendRetryLimit: 3,
     supportsVision: false,
     timings,
+    without,
     chipAtItemLevel: true,
     reliableCounts: true,
     init({ diag: d } = {}) { if (d) diag = d; },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,
     streamLen, snapshot,
-    getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barMount,
+    getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barMount, barAnchor,
     setInputLock, typeAndSend, stopGeneration,
     isGenerating, isBusyNow, isHardGenerating,
     enforceComposer, ensureComposerReady,

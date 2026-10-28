@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 const SUPPORTED_HOSTS = [
-  "chat.deepseek.com", "deepseek.com", "chatgpt.com", "chat.openai.com", "claude.ai",
+  "chat.deepseek.com", "deepseek.com", "chatgpt.com", "chat.openai.com", "claude.ai", "www.claude.ai",
   "gemini.google.com", "www.kimi.ai", "kimi.ai",
   "chat.z.ai", "chat.qwen.ai", "arena.ai", "www.meta.ai", "meta.ai", "ptero.pro", "grok.com",
 ];
@@ -76,6 +76,18 @@ function refresh() {
 document.getElementById("reconnect").addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "reconnect" }, () => setTimeout(refresh, 600));
 });
+const openChatgptBtn = document.getElementById("open-chatgpt");
+if (openChatgptBtn) {
+  openChatgptBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: "https://chatgpt.com/" });
+  });
+}
+const openClaudeBtn = document.getElementById("open-claude");
+if (openClaudeBtn) {
+  openClaudeBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: "https://claude.ai/new" });
+  });
+}
 document.getElementById("restart").addEventListener("click", (e) => {
   e.target.textContent = "Restarting…";
   chrome.runtime.sendMessage({ type: "restart_mcp" }, () => {

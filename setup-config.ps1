@@ -162,3 +162,37 @@ if ($studioMcp) {
 else {
     Write-Host "Roblox Studio MCP not found; VS Code remains available."
 }
+
+# Optional: Auto-configure Claude Desktop if installed (%APPDATA%\Claude)
+if ($env:APPDATA) {
+    $claudeDir = Join-Path $env:APPDATA "Claude"
+    if (Test-Path -LiteralPath $claudeDir -PathType Container) {
+        $claudeConfigPath = Join-Path $claudeDir "claude_desktop_config.json"
+        try {
+            $claudeCfg = if (Test-Path -LiteralPath $claudeConfigPath -PathType Leaf) {
+                Get-Content -LiteralPath $claudeConfigPath -Raw | ConvertFrom-Json
+            } else {
+                [pscustomobject]@{ mcpServers = [pscustomobject]@{} }
+            }
+            if (-not $claudeCfg.PSObject.Properties["mcpServers"]) {
+                $claudeCfg | Add-Member -MemberType NoteProperty -Name mcpServers -Value ([pscustomobject]@{})
+            }
+            Set-ConfigProperty -Object $claudeCfg.mcpServers -Name "snapgent-vscode" -Value ([pscustomobject]@{
+                command = $vscodeMcpCommand
+                args = $vscodeMcpArgs
+            })
+            if ($studioMcp) {
+                Set-ConfigProperty -Object $claudeCfg.mcpServers -Name "snapgent-roblox" -Value ([pscustomobject]@{
+                    command = $studioMcp.FullName
+                    args = @("--stdio")
+                })
+            }
+            $claudeJson = ConvertTo-Json -InputObject $claudeCfg -Depth 20
+            [System.IO.File]::WriteAllText($claudeConfigPath, "$claudeJson`n", $utf8WithoutBom)
+            Write-Host "Claude Desktop MCP configured: $claudeConfigPath"
+        }
+        catch {
+            Write-Host "Note: Could not update Claude Desktop config ($($_.Exception.Message))"
+        }
+    }
+}

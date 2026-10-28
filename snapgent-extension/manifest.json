@@ -10,6 +10,7 @@
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://claude.ai/*",
+    "https://www.claude.ai/*",
     "https://gemini.google.com/*",
     "https://www.kimi.ai/*",
     "https://kimi.ai/*",
@@ -60,7 +61,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://claude.ai/*"],
+      "matches": ["https://claude.ai/*", "https://www.claude.ai/*"],
       "js": ["core/config.js", "core/parser.js", "providers/claude.js", "core/main.js"],
       "css": ["overlay.css"],
       "run_at": "document_idle"
